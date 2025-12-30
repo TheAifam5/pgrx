@@ -9,7 +9,7 @@ repository = "https://github.com/pgcentralfoundation/pgrx"
 documentation = "https://docs.rs/pgrx-bindgen"
 
 [features]
-default = ["clang-runtime"]
+default = []
 clang-static = ["bindgen/static", "clang-sys/static"]
 clang-runtime = ["bindgen/runtime", "clang-sys/runtime"]
 

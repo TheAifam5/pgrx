@@ -23,7 +23,7 @@ include = ["src/**/*", "README.md", "include/*", "pgrx-cshim.c", "bindgen.rs"]
 build = "bindgen.rs"
 
 [features]
-default = ["clang-runtime"]
+default = []
 pg13 = []
 pg14 = []
 pg15 = []
