@@ -46,74 +46,81 @@ pub(crate) fn detect_include_paths_for(
         }
     }
 
-    // Oh no, still here?
-    // Let's go behind bindgen's back to get libclang's path
-    let libclang_path =
-        clang_sys::get_library().expect("libclang should have been loaded?").path().to_owned();
-    eprintln!("found libclang at {}", libclang_path.display());
-    // libclang will probably be in a dynamic library directory,
-    // which means it will probably be adjacent to its headers, e.g.
-    // - "/usr/lib/libclang-${CLANG_MAJOR}.so.${CLANG_MAJOR}.${CLANG_MINOR}"
-    // - "/usr/lib/clang/${CLANG_MAJOR}/include"
-    let clang_major_fmt = clang_major.to_string();
-    let mut paths = vec![];
-    // by adjacent, that does not mean it is always immediately so, e.g.
-    // - "/usr/lib/x86_64-linux-gnu/libclang-${CLANG_MAJOR}.so.${CLANG_MAJOR}.${CLANG_MINOR}.${CLANG_SUBMINOR}"
-    // - "/usr/lib/clang/${CLANG_MAJOR}/include"
-    // or
-    // - "/usr/lib64/libclang-${CLANG_MAJOR}.so.${CLANG_MAJOR}.${CLANG_MINOR}.${CLANG_SUBMINOR}"
-    // - "/usr/lib/clang/${CLANG_MAJOR}/include"
-    // so, crawl back up the ancestral tree
-    for ancestor in libclang_path.ancestors() {
-        paths = WalkDir::new(ancestor)
-            .min_depth(1)
-            .max_depth(6)
-            .sort_by_file_name()
-            .into_iter()
-            // On Unix-y systems this will be like "/usr/lib/clang/$CLANG_MAJOR/include"
-            // so don't even descend if the directory doesn't have one of those parts
-            .filter_entry(|entry| {
-                !is_hidden(entry) && {
-                    entry_contains(entry, "clang")
-                        || entry_contains(entry, "include")
-                        || entry_contains(entry, &clang_major_fmt)
-                        // we always want to descend from a lib dir, but only one step
-                        // as we don't really want to search all of /usr/lib's subdirs
-                        || os_str_contains(entry.file_name(), "lib")
-                }
-            })
-            .filter_map(|e| e.ok()) // be discreet
-            // We now need something that looks like it actually satisfies all our constraints
-            .filter(|entry| {
-                entry_contains(entry, &clang_major_fmt)
-                    && entry_contains(entry, "clang")
-                    && entry_contains(entry, "include")
-            })
-            // we need to pull the actual directories that include the SIMD headers
-            .filter(|entry| {
-                os_str_contains(entry.file_name(), "emmintrin.h")
-                    || os_str_contains(entry.file_name(), "arm_neon.h")
-            })
-            .filter_map(|entry| {
-                let mut pbuf = entry.into_path();
-                if pbuf.pop() && pbuf.is_dir() && os_str_contains(pbuf.file_name()?, "include") {
-                    Some(pbuf)
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
+    #[cfg(feature = "clang-runtime")]
+    {
+        // Oh no, still here?
+        // Let's go behind bindgen's back to get libclang's path
+        let libclang_path =
+            clang_sys::get_library().expect("libclang should have been loaded?").path().to_owned();
+        eprintln!("found libclang at {}", libclang_path.display());
+        // libclang will probably be in a dynamic library directory,
+        // which means it will probably be adjacent to its headers, e.g.
+        // - "/usr/lib/libclang-${CLANG_MAJOR}.so.${CLANG_MAJOR}.${CLANG_MINOR}"
+        // - "/usr/lib/clang/${CLANG_MAJOR}/include"
+        let clang_major_fmt = clang_major.to_string();
+        let mut paths = vec![];
+        // by adjacent, that does not mean it is always immediately so, e.g.
+        // - "/usr/lib/x86_64-linux-gnu/libclang-${CLANG_MAJOR}.so.${CLANG_MAJOR}.${CLANG_MINOR}.${CLANG_SUBMINOR}"
+        // - "/usr/lib/clang/${CLANG_MAJOR}/include"
+        // or
+        // - "/usr/lib64/libclang-${CLANG_MAJOR}.so.${CLANG_MAJOR}.${CLANG_MINOR}.${CLANG_SUBMINOR}"
+        // - "/usr/lib/clang/${CLANG_MAJOR}/include"
+        // so, crawl back up the ancestral tree
+        for ancestor in libclang_path.ancestors() {
+            paths = WalkDir::new(ancestor)
+                .min_depth(1)
+                .max_depth(6)
+                .sort_by_file_name()
+                .into_iter()
+                // On Unix-y systems this will be like "/usr/lib/clang/$CLANG_MAJOR/include"
+                // so don't even descend if the directory doesn't have one of those parts
+                .filter_entry(|entry| {
+                    !is_hidden(entry) && {
+                        entry_contains(entry, "clang")
+                            || entry_contains(entry, "include")
+                            || entry_contains(entry, &clang_major_fmt)
+                            // we always want to descend from a lib dir, but only one step
+                            // as we don't really want to search all of /usr/lib's subdirs
+                            || os_str_contains(entry.file_name(), "lib")
+                    }
+                })
+                .filter_map(|e| e.ok()) // be discreet
+                // We now need something that looks like it actually satisfies all our constraints
+                .filter(|entry| {
+                    entry_contains(entry, &clang_major_fmt)
+                        && entry_contains(entry, "clang")
+                        && entry_contains(entry, "include")
+                })
+                // we need to pull the actual directories that include the SIMD headers
+                .filter(|entry| {
+                    os_str_contains(entry.file_name(), "emmintrin.h")
+                        || os_str_contains(entry.file_name(), "arm_neon.h")
+                })
+                .filter_map(|entry| {
+                    let mut pbuf = entry.into_path();
+                    if pbuf.pop() && pbuf.is_dir() && os_str_contains(pbuf.file_name()?, "include") {
+                        Some(pbuf)
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
 
-        if !paths.is_empty() {
-            paths.sort();
-            paths.dedup();
-            break;
+            if !paths.is_empty() {
+                paths.sort();
+                paths.dedup();
+                break;
+            }
         }
+        // If we have anything better to recommend, don't autodetect!
+        let autodetect = paths.is_empty();
+        eprintln!("Found include dirs {paths:?}");
+        return (autodetect, paths);
     }
-    // If we have anything better to recommend, don't autodetect!
-    let autodetect = paths.is_empty();
-    eprintln!("Found include dirs {paths:?}");
-    (autodetect, paths)
+
+    // If we're using a static libclang, we can't really do much better than this.
+    eprintln!("Using static libclang; cannot autodetect include paths.");
+    (true, vec![])
 }
 
 fn is_hidden(entry: &DirEntry) -> bool {
