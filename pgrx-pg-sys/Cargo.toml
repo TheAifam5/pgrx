@@ -23,7 +23,7 @@ include = ["src/**/*", "README.md", "include/*", "pgrx-cshim.c", "bindgen.rs"]
 build = "bindgen.rs"
 
 [features]
-default = []
+default = ["clang-runtime"]
 pg13 = []
 pg14 = []
 pg15 = []
@@ -31,6 +31,8 @@ pg16 = []
 pg17 = []
 pg18 = []
 cshim = []
+clang-static = ["pgrx-bindgen/clang-static"]
+clang-runtime = ["pgrx-bindgen/clang-runtime"]
 
 [package.metadata.docs.rs]
 features = ["pg14", "cshim"]
@@ -53,7 +55,7 @@ serde.workspace = true # impls on pub types
 cee-scape = "0.2"
 
 [build-dependencies]
-pgrx-bindgen.workspace = true
+pgrx-bindgen = { workspace = true, default-features = false }
 
 [lints]
 # we allow improper_ctypes just to eliminate these warnings:

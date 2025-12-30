@@ -27,7 +27,7 @@ include = ["src/**/*"]
 crate-type = ["rlib"]
 
 [features]
-default = ["cshim"]
+default = ["cshim", "clang-runtime"]
 cshim = ["pgrx-pg-sys/cshim"]
 pg13 = ["pgrx-pg-sys/pg13"]
 pg14 = ["pgrx-pg-sys/pg14"]
@@ -38,6 +38,8 @@ pg18 = ["pgrx-pg-sys/pg18"]
 no-schema-generation = ["pgrx-macros/no-schema-generation", "pgrx-sql-entity-graph/no-schema-generation"]
 unsafe-postgres = []     # when trying to compile against something that looks like Postgres but claims to be different
 nightly = []    # For features and functionality which require nightly Rust - for example, std::mem::allocator.
+clang-static = ["pgrx-pg-sys/clang-static"]  # build pgrx-pg-sys with static clang linking
+clang-runtime = ["pgrx-pg-sys/clang-runtime"] # build pgrx-pg-sys with dynamic clang linking
 
 [package.metadata.docs.rs]
 features = ["pg14", "cshim"]
@@ -47,7 +49,7 @@ rustc-args = ["--cfg", "docsrs"]
 
 [dependencies]
 pgrx-macros.workspace = true
-pgrx-pg-sys.workspace = true
+pgrx-pg-sys = { workspace = true, default-features = false }
 pgrx-sql-entity-graph.workspace = true
 
 thiserror.workspace = true # error handling and logging
